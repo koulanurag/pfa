@@ -1,0 +1,7 @@
+*.DS_Store
+*.pyc
+*.swp
+temp/*
+results/*
+# developer environments
+.idea
