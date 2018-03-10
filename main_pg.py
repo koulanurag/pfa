@@ -1,4 +1,5 @@
 import argparse
+import visdom
 import os
 import torch
 import torch.nn as nn
@@ -43,10 +44,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
-    env_fn = lambda: FruitCollection()
+    vis = visdom.Visdom()
+    env_fn = lambda: FruitCollection(vis=vis)
     _env = env_fn()
     total_actions = _env.total_actions
     obs = _env.reset()
+    _env.close()
     policy_net = PolicyNet(obs.shape[0], total_actions)
 
     # create directories to store results
@@ -69,4 +72,4 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
     if args.test:
         policy_net.eval()
-        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True))
+        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True,render=True))

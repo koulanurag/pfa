@@ -9,12 +9,12 @@ from hybrid_pg import HybridPolicyGraident
 
 
 class PolicyNet(nn.Module):
-    def __init__(self, in_channels, actions, reward_types):
+    def __init__(self, input_size, actions, reward_types):
         super(PolicyNet, self).__init__()
         self.reward_types = reward_types
-        self.conv1 = nn.Conv2d(in_channels, 6, 3)
-        self.fc1_input_size = 8 * 8 * 6
-        self.fc1 = nn.Linear(self.fc1_input_size, 64)
+
+        self.fc0 = nn.Linear(input_size, 256)
+        self.fc1 = nn.Linear(256, 64)
 
         for network_i in range(reward_types):
             layer = nn.Sequential(nn.Linear(64, 32),
@@ -28,8 +28,7 @@ class PolicyNet(nn.Module):
         self.actor_linear.bias.data.fill_(0)
 
     def forward(self, input):
-        x = F.relu(self.conv1(input))
-        x = x.view(self.fc1_input_size)
+        x = F.relu(self.fc0(input))
         x = F.relu(self.fc1(x))
         comb_policies = None
         for network_i in range(self.reward_types):
@@ -64,7 +63,7 @@ if __name__ == '__main__':
     env_fn = lambda: FruitCollection(hybrid=True)
     _env = env_fn()
     total_actions = _env.total_actions
-    policy_net = PolicyNet(1, total_actions, _env.total_fruits)
+    policy_net = PolicyNet(_env.reset().shape[0], total_actions, _env.total_fruits)
 
     # create directories to store results
     result_dir = ensure_directory_exits(os.path.join(os.getcwd(), 'results'))

@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import visdom
 
 
 class FruitCollection:
@@ -7,7 +8,7 @@ class FruitCollection:
     A simple Fruit Collection environment
     """
 
-    def __init__(self, hybrid=False):
+    def __init__(self, vis=None, hybrid=False):
         self.total_fruits = 10
         self.visible_fruits = 5
         self.total_actions = 4
@@ -18,8 +19,9 @@ class FruitCollection:
         self.grid_size = (10, 10)
         self.max_steps = 300
         self.curr_step_count = 0
-        random.seed(0)
-        self._fruit_positions = [(random.randint(0, 9), random.randint(0, 9)) for _ in range(self.total_fruits)]
+        self._fruit_positions = [(0, 0), (9, 9), (9, 0), (0, 9), (1, 7), (4, 8), (8, 4), (3, 6), (5, 8), (2, 2)]
+        self.__vis = vis
+        self.__image_window = None
 
     def __move(self, action):
         agent_pos = None
@@ -66,28 +68,57 @@ class FruitCollection:
         grid[self._agent_position[0], self._agent_position[1]] = 1
         fruit_vector = np.zeros(self.total_fruits)
         fruit_vector[self._fruit_consumed] = 1
-        return np.concatenate((grid.reshape(self.grid_size[0] * self.grid_size[1]),fruit_vector))
+        return np.concatenate((grid.reshape(self.grid_size[0] * self.grid_size[1]), fruit_vector))
 
     def reset(self):
-        selected_fruits_loc = random.sample(range(self.total_fruits), self.visible_fruits)
-        self._fruit_consumed = [(True if (i in selected_fruits_loc) else False) for i in range(self.total_fruits)]
-        self._agent_position = [random.randint(0, 9), random.randint(0, 9)]
+        available_fruits_loc = random.sample(range(self.total_fruits), self.visible_fruits)
+        self._fruit_consumed = [(False if (i in available_fruits_loc) else True) for i in range(self.total_fruits)]
+        while True:
+            self._agent_position = [random.randint(0, 9), random.randint(0, 9)]
+            if tuple(self._agent_position) not in self._fruit_positions:
+                break
         obs = self._get_observation()
         return obs
 
     def close(self):
+        self.__vis.close(win=self.__image_window)
+        # self.__vis.close(win=None)
         pass
 
     def seed(self, x):
         pass
 
+    def __get_obs_image(self):
+        img = np.ones((3, 10, 10))
+        img[:] = 255
+
+        # color agent
+        img[0, self._agent_position[0], self._agent_position[1]] = 224
+        img[1, self._agent_position[0], self._agent_position[1]] = 80
+        img[2, self._agent_position[0], self._agent_position[1]] = 20
+
+        # fruits
+        for i, consumed in enumerate(self._fruit_consumed):
+            if not consumed:
+                img[0, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 91
+                img[1, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 226
+                img[2, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 116
+        return img
+
     def render(self):
-        print(self._get_observation())
+        _obs_image = self.__get_obs_image()
+        if self.__vis is not None:
+            opts = dict(title=self.name, width=400, height=400)
+            if self.__image_window is None:
+                self.__image_window = self.__vis.image(_obs_image, opts=opts)
+            else:
+                self.__vis.image(_obs_image, opts=opts, win=self.__image_window)
+        return _obs_image
 
 
 if __name__ == '__main__':
-
-    env_fn = lambda: FruitCollection()
+    vis = visdom.Visdom()
+    env_fn = lambda: FruitCollection(vis=vis)
     for ep in range(5):
         random.seed(ep)
         env = env_fn()
@@ -95,6 +126,7 @@ if __name__ == '__main__':
         obs = env.reset()
         total_reward = 0
         while not done:
+            env.render()
             print(obs)
             action = int(input("action:"))
             obs, reward, done, info = env.step(action)

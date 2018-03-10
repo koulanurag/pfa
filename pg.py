@@ -79,13 +79,13 @@ class PolicyGraident:
             if episode % 50 == 0:
                 test_reward = self.test(net, env_fn, 10, log=True)
                 test_perf_data.append(test_reward)
-                print('Performance:', test_reward)
+                print('Test Performance:', test_reward)
                 if best is None or best <= test_reward:
                     torch.save(net.state_dict(), net_path)
                     best = test_reward
                     print('Model Saved!')
             if episode % 200 == 0:
-                plot_data(self.__get_plot_data_dict(train_perf_data, test_perf_data),plots_dir)
+                plot_data(self.__get_plot_data_dict(train_perf_data, test_perf_data), plots_dir)
         return net
 
     def test(self, net, env_fn, episodes, log=False, render=False):
@@ -100,6 +100,8 @@ class PolicyGraident:
             ep_actions = []  # just to exit early if the agent is stuck
             steps = 0
             while not done:
+                if render:
+                    env.render()
                 obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
                 action = int(np.argmax(action_probs.cpu().data.numpy()[0]))
@@ -116,6 +118,7 @@ class PolicyGraident:
                     ep_actions.append(action)
 
                 steps += 1
+            env.close()
             all_episode_rewards += episode_reward
             if log:
                 print('Test => Episode:{} Reward:{} Length:{}'.format(episode, episode_reward, steps))

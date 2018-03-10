@@ -31,7 +31,7 @@ class HybridPolicyGraident:
             ep_decomposed_rewards = []
             obs = env.reset()
             while not done:
-                obs = Variable(torch.Tensor([obs.tolist()])).unsqueeze(0)
+                obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
                 action_probs, reward_type_action_probs = net(obs)
                 m = Categorical(action_probs)
                 action = m.sample()
@@ -103,7 +103,7 @@ class HybridPolicyGraident:
             ep_actions = []  # just to exit early if the agent is stuck
             steps = 0
             while not done:
-                obs = Variable(torch.Tensor([obs.tolist()])).unsqueeze(0)
+                obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
                 action_probs, _ = net(obs)
                 action = int(np.argmax(action_probs.cpu().data.numpy()))
                 obs, reward, done, info = env.step(action)
