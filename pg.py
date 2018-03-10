@@ -1,4 +1,5 @@
 import random
+import time
 import numpy as np
 import torch
 from torch.optim import Adam
@@ -30,6 +31,7 @@ class PolicyGraident:
         test_perf_data = []
         train_perf_data = []
         best = None
+        n_trajectory_loss = []
         for episode in range(args.train_episodes):
             random.seed(random.randint(1000, 100000))
             net.train()
@@ -42,7 +44,7 @@ class PolicyGraident:
             ep_rewards = []
             obs = env.reset()
             while not done:
-                obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
+                obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
                 m = Categorical(action_probs)
                 action = m.sample()
@@ -55,7 +57,7 @@ class PolicyGraident:
 
             train_perf_data.append(total_reward)
 
-            # Estimate the Gradients and update the network
+            # Estimate the Gradients
             R = 0
             discounted_returns = []
             for r in ep_rewards[::-1]:
@@ -69,12 +71,20 @@ class PolicyGraident:
             policy_loss = []
             for log_prob, score in zip(log_probs, discounted_returns):
                 policy_loss.append(-log_prob * score)
+            n_trajectory_loss.append(policy_loss)  # collect n-trajectories
 
-            optimizer.zero_grad()
-            policy_loss = torch.cat(policy_loss).sum()
-            policy_loss.backward()
-            optimizer.step()
+            # Update the network after collecting n trajectories
+            if episode % 10 == 0:
+                optimizer.zero_grad()
+                sample_loss = 0
+                for _loss in n_trajectory_loss:
+                    sample_loss += torch.cat(_loss).sum()
+                sample_loss = sample_loss / 10
+                sample_loss.backward()
+                optimizer.step()
+                n_trajectory_loss = []
             print('Train=> Episode:{} Reward:{} Length:{}'.format(episode, total_reward, len(ep_rewards)))
+
             # test and log
             if episode % 50 == 0:
                 test_reward = self.test(net, env_fn, 10, log=True)
@@ -84,11 +94,14 @@ class PolicyGraident:
                     torch.save(net.state_dict(), net_path)
                     best = test_reward
                     print('Model Saved!')
+                if best == env.reward_threshold:
+                    print('Optimal Performance achieved!!')
+                    break
             if episode % 200 == 0:
                 plot_data(self.__get_plot_data_dict(train_perf_data, test_perf_data), plots_dir)
         return net
 
-    def test(self, net, env_fn, episodes, log=False, render=False):
+    def test(self, net, env_fn, episodes, log=False, render=False, sleep=0):
         net.eval()
         all_episode_rewards = 0
         for episode in range(episodes):
@@ -102,7 +115,7 @@ class PolicyGraident:
             while not done:
                 if render:
                     env.render()
-                obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
+                obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
                 action = int(np.argmax(action_probs.cpu().data.numpy()[0]))
                 obs, reward, done, info = env.step(action)
@@ -116,6 +129,7 @@ class PolicyGraident:
                     ep_actions = [action]
                 else:
                     ep_actions.append(action)
+                time.sleep(sleep)
 
                 steps += 1
             env.close()

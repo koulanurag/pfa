@@ -85,4 +85,4 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
     if args.test:
         policy_net.eval()
-        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True))
+        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, sleep=15))

@@ -17,11 +17,12 @@ class FruitCollection:
         self.name = 'FruitCollection'
         self.hybrid = hybrid
         self.grid_size = (10, 10)
-        self.max_steps = 300
+        self.max_steps = 100
         self.curr_step_count = 0
         self._fruit_positions = [(0, 0), (9, 9), (9, 0), (0, 9), (1, 7), (4, 8), (8, 4), (3, 6), (5, 8), (2, 2)]
         self.__vis = vis
         self.__image_window = None
+        self.reward_threshold = 5  # optimal reward possible
 
     def __move(self, action):
         agent_pos = None

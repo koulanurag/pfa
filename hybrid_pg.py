@@ -92,7 +92,7 @@ class HybridPolicyGraident:
 
         return net
 
-    def test(self, net, env_fn, episodes, log=False, render=False):
+    def test(self, net, env_fn, episodes, log=False, render=False, sleep=0):
         net.eval()
         all_episode_rewards = 0
         for episode in range(episodes):

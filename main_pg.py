@@ -38,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--train', action='store_true', default=False, help='Train')
     parser.add_argument('--test', action='store_true', default=False, help='Test')
-    parser.add_argument('--train_episodes', type=int, default=10000, help='Train Episode count')
+    parser.add_argument('--train_episodes', type=int, default=50000, help='Train Episode count')
     parser.add_argument('--test_episodes', type=int, default=100, help='Test Episode count')
     parser.add_argument('--lr', type=float, default=0.01, help='Test')
     args = parser.parse_args()
@@ -72,4 +72,4 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
     if args.test:
         policy_net.eval()
-        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True,render=True))
+        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, render=True, sleep=1))
