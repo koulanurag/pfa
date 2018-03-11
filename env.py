@@ -25,6 +25,8 @@ class FruitCollection:
         self.reward_threshold = 5  # optimal reward possible
         self.game_score = 0
         self.__linear_grid_window = None
+        self.step_reward = 0
+        self.fruit_collected = 0
 
     def __move(self, action):
         agent_pos = None
@@ -49,7 +51,7 @@ class FruitCollection:
         if self.hybrid:
             reward = [0 for _ in range(self.total_fruits)]
         else:
-            reward = 0
+            reward = -0.02
         self.curr_step_count += 1
         if self.__move(action):
             if tuple(self._agent_position) in self._fruit_positions:
@@ -57,14 +59,16 @@ class FruitCollection:
                 if not self._fruit_consumed[idx]:
                     self._fruit_consumed[idx] = True
                     if self.hybrid:
-                        reward[idx] = 1
+                        reward[idx] = 2
                     else:
-                        reward = 1
-                    self.game_score += 1
+                        reward = 2
+                    self.fruit_collected += 1
+
         done = (False not in self._fruit_consumed) or (self.curr_step_count > self.max_steps)
         next_obs = self._get_observation()
         info = {}
-
+        self.step_reward = reward
+        self.game_score += self.step_reward
         return next_obs, reward, done, info
 
     def _get_observation(self):
@@ -114,8 +118,10 @@ class FruitCollection:
     def render(self):
         _obs_image = self.__get_obs_image()
         if self.__vis is not None:
-            opts = dict(title='{}  Reward:{} Steps:{}'.format(self.name, self.game_score, self.curr_step_count),
-                        width=400, height=400)
+            opts = dict(title='{}       Fruit Collected:{} Overall_Reward:{} Step Reward:{} Steps:{}'
+                        .format(self.name, self.fruit_collected, self.game_score, self.step_reward,
+                                self.curr_step_count),
+                        width=500, height=500)
             if self.__image_window is None:
                 self.__image_window = self.__vis.image(_obs_image, opts=opts)
             else:
