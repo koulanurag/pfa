@@ -49,7 +49,7 @@ class FruitCollection:
         if action >= self.total_actions:
             raise ValueError("action must be one of %r" % range(self.total_actions))
         if self.hybrid:
-            reward = [0 for _ in range(self.total_fruits)]
+            reward = [ 0 if consumed else -0.004 for consumed in self._fruit_consumed]
         else:
             reward = -0.02
         self.curr_step_count += 1
@@ -68,7 +68,7 @@ class FruitCollection:
         next_obs = self._get_observation()
         info = {}
         self.step_reward = reward
-        self.game_score += self.step_reward
+        self.game_score += sum(self.step_reward) if self.hybrid else self.step_reward
         return next_obs, reward, done, info
 
     def _get_observation(self):

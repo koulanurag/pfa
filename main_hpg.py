@@ -15,11 +15,11 @@ class PolicyNet(nn.Module):
         self.reward_types = reward_types
 
         for network_i in range(reward_types):
-            layer = nn.Sequential(nn.Linear(input_size, 256),
+            layer = nn.Sequential(nn.Linear(input_size, 250),
                                   nn.ReLU(),
-                                  nn.Linear(256, 64),
-                                  nn.ReLU(),
-                                  nn.Linear(64, actions))
+                                  # nn.Linear(50, 50),
+                                  # nn.ReLU(),
+                                  nn.Linear(250, actions))
             setattr(self, 'policy_{}'.format(network_i), layer)
         self.actor_input_size = reward_types * actions
         self.actor_linear = nn.Linear(self.actor_input_size, actions)
@@ -60,8 +60,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
-    vis = visdom.Visdom()
-    env_fn = lambda: FruitCollection(hybrid=True, vis=vis)
+    env_fn = lambda: FruitCollection(hybrid=True, vis=visdom.Visdom() if args.render else None)
     _env = env_fn()
     total_actions = _env.total_actions
     policy_net = PolicyNet(_env.reset().shape[0], total_actions, _env.total_fruits)

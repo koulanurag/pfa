@@ -27,7 +27,10 @@ class HybridPolicyGraident:
         test_perf_data = []
         train_perf_data = []
         best = None
+        n_trajectory_loss = []
+        n_trajectory_type_loss = []
         for episode in range(args.train_episodes):
+            episode_start_time = time.time()
             net.train()
             env = env_fn()
 
@@ -73,26 +76,57 @@ class HybridPolicyGraident:
             discounted_total_returns = (discounted_total_returns - discounted_total_returns.mean()) / (
                     discounted_total_returns.std() + np.finfo(np.float32).eps)
 
+            for i in discounted_decomposed_returns:
+                discounted_decomposed_returns[i] = torch.FloatTensor(discounted_decomposed_returns[i])
+                discounted_decomposed_returns[i] = (discounted_decomposed_returns[i] - discounted_decomposed_returns[i].mean()) / (
+                        discounted_decomposed_returns[i].std() + np.finfo(np.float32).eps)
+
             policy_loss = []
             policy_type_losses = {i: [] for i in range(self.reward_types)}
             for log_prob, score in zip(log_probs, discounted_total_returns):
                 policy_loss.append(-log_prob * score)
+
             for type_i in range(self.reward_types):
                 for log_prob, score in zip(reward_type_log_probs[type_i], discounted_decomposed_returns[type_i]):
                     policy_type_losses[type_i].append(-log_prob * score)
 
-            optimizer.zero_grad()
-            policy_loss = torch.cat(policy_loss).sum()
-            if self.decompose:
-                for type_i in range(self.reward_types):
-                    policy_loss += torch.cat(policy_type_losses[type_i]).sum()
-            policy_loss.backward()
-            optimizer.step()
-            print('Episode:{} Reward:{} Length:{}'.format(episode, total_reward, len(ep_decomposed_rewards)))
+            n_trajectory_loss.append(policy_loss)
+            n_trajectory_type_loss.append(policy_type_losses)
+
+            if episode % 10 == 0:
+                start_time = time.time()
+                optimizer.zero_grad()
+                sample_loss = 0
+
+                for _loss in n_trajectory_loss:
+                    sample_loss += torch.cat(_loss).sum()
+
+                if self.decompose:
+                    for _loss in n_trajectory_type_loss:
+                        for type_i in range(self.reward_types):
+                            sample_loss += torch.cat(_loss[type_i]).sum()
+
+                end_time = time.time()
+                print("Loss Time", end_time - start_time)
+
+                sample_loss = sample_loss / 10
+                start_time = time.time()
+                sample_loss.backward()
+                optimizer.step()
+                end_time = time.time()
+                n_trajectory_loss = []
+                n_trajectory_type_loss = []
+
+                print("Update Network Time", end_time - start_time)
+
+
+
+            episode_end_time = time.time()
+            print('Episode:{} Reward:{} Length:{} Time:{}'.format(episode, total_reward, len(ep_decomposed_rewards), episode_end_time - episode_start_time))
 
             # test and log
             if episode % 50 == 0:
-                test_reward = self.test(net, env_fn, 10, log=True)
+                test_reward = self.test(net, env_fn, 10, log=True, render=False)
                 test_perf_data.append(test_reward)
                 print('Performance:', test_reward)
                 if best is None or best <= test_reward:
@@ -119,7 +153,8 @@ class HybridPolicyGraident:
                     env.render()
                 obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
                 action_probs, _ = net(obs)
-                action = int(np.argmax(action_probs.cpu().data.numpy()))
+                m = Categorical(action_probs)
+                action = m.sample().data[0]
                 obs, reward, done, info = env.step(action)
                 episode_reward += sum(reward)
 
