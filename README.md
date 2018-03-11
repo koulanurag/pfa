@@ -8,6 +8,10 @@
     ```
 
 ## Usage
+  * If using render option: Start the visdom server before running the script
+    ```sh
+    python -m visdom.server
+    ```
   * Policy Gradient:
       * Training: ```python main_pg.py --train```
       * Testing: ```python main_pg.py --test```

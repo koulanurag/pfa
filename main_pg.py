@@ -30,23 +30,23 @@ class PolicyNet(nn.Module):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' Policy Fusion Architecture - PyTorch')
     parser.add_argument('--gamma', type=float, default=0.99, metavar='G', help='discount factor (default: 0.99)')
-    parser.add_argument('--seed', type=int, default=10, metavar='N', help='random seed (default: 543)')
-    parser.add_argument('--render', action='store_true', help='render the environment')
-    parser.add_argument('--hybrid', action='store_true', help='use hybrid reward')
-    parser.add_argument('--log-interval', type=int, default=5, metavar='N',
-                        help='interval between training status logs (default: 10)')
-    parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
-    parser.add_argument('--train', action='store_true', default=False, help='Train')
-    parser.add_argument('--test', action='store_true', default=False, help='Test')
-    parser.add_argument('--train_episodes', type=int, default=100000, help='Train Episode count')
-    parser.add_argument('--test_episodes', type=int, default=100, help='Test Episode count')
-    parser.add_argument('--lr', type=float, default=0.01, help='Test')
-    parser.add_argument('--scratch', action='store_true', help='scratch')
+    parser.add_argument('--seed', type=int, default=10, metavar='N', help='random seed (default: 10)')
+    parser.add_argument('--render', action='store_true', default=False, help='render the environment')
+    parser.add_argument('--hybrid', action='store_true', default=False, help='use hybrid reward')
+    parser.add_argument('--log-interval', type=int, default=5,
+                        help='interval between training status logs (default: 5)')
+    parser.add_argument('--no_cuda', action='store_true', default=False, help='Disables Cuda Usage')
+    parser.add_argument('--train', action='store_true', default=False, help='Train the network')
+    parser.add_argument('--test', action='store_true', default=False, help='Test the network')
+    parser.add_argument('--train_episodes', type=int, default=100000, help='Episode count for training')
+    parser.add_argument('--test_episodes', type=int, default=100, help='Episode count for testing')
+    parser.add_argument('--lr', type=float, default=0.01, help='Learning Rate for Training (Adam Optimizer)')
+    parser.add_argument('--scratch', action='store_true', default=False,
+                        help='Train the network from scratch ( or Does not load pre-trained model)')
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
-    vis = visdom.Visdom()
-    env_fn = lambda: FruitCollection(vis=vis)
+    env_fn = lambda: FruitCollection(vis=visdom.Visdom() if args.render else None)
     _env = env_fn()
     total_actions = _env.total_actions
     obs = _env.reset()
@@ -73,4 +73,5 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
     if args.test:
         policy_net.eval()
-        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, render=True, sleep=1))
+        print('Average Performance:',
+              pg.test(policy_net, env_fn, args.test_episodes, log=True, render=args.render, sleep=1))

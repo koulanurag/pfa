@@ -19,10 +19,12 @@ class FruitCollection:
         self.grid_size = (10, 10)
         self.max_steps = 100
         self.curr_step_count = 0
-        self._fruit_positions = [(0, 0), (9, 9), (9, 0), (0, 9), (1, 7), (4, 8), (8, 4), (3, 6), (5, 8), (2, 2)]
+        self._fruit_positions = [(1, 0), (3, 1), (8, 2), (2, 3), (5, 4), (1, 5), (6, 6), (9, 7), (5, 8), (1, 9)]
         self.__vis = vis
         self.__image_window = None
         self.reward_threshold = 5  # optimal reward possible
+        self.game_score = 0
+        self.__linear_grid_window = None
 
     def __move(self, action):
         agent_pos = None
@@ -58,6 +60,7 @@ class FruitCollection:
                         reward[idx] = 1
                     else:
                         reward = 1
+                    self.game_score += 1
         done = (False not in self._fruit_consumed) or (self.curr_step_count > self.max_steps)
         next_obs = self._get_observation()
         info = {}
@@ -68,10 +71,11 @@ class FruitCollection:
         grid = np.zeros((self.grid_size[0], self.grid_size[1]))
         grid[self._agent_position[0], self._agent_position[1]] = 1
         fruit_vector = np.zeros(self.total_fruits)
-        fruit_vector[[ not x for x in self._fruit_consumed]] = 1
+        fruit_vector[[not x for x in self._fruit_consumed]] = 1
         return np.concatenate((grid.reshape(self.grid_size[0] * self.grid_size[1]), fruit_vector))
 
     def reset(self):
+        self.game_score = 0
         available_fruits_loc = random.sample(range(self.total_fruits), self.visible_fruits)
         self._fruit_consumed = [(False if (i in available_fruits_loc) else True) for i in range(self.total_fruits)]
         while True:
@@ -82,8 +86,9 @@ class FruitCollection:
         return obs
 
     def close(self):
-        self.__vis.close(win=self.__image_window)
-        # self.__vis.close(win=None)
+        if self.__vis is not None:
+            self.__vis.close(win=self.__image_window)
+            self.__vis.close(win=self.__linear_grid_window)
         pass
 
     def seed(self, x):
@@ -109,15 +114,21 @@ class FruitCollection:
     def render(self):
         _obs_image = self.__get_obs_image()
         if self.__vis is not None:
-            opts = dict(title=self.name, width=400, height=400)
+            opts = dict(title='{}  Reward:{} Steps:{}'.format(self.name, self.game_score, self.curr_step_count),
+                        width=400, height=400)
             if self.__image_window is None:
                 self.__image_window = self.__vis.image(_obs_image, opts=opts)
             else:
                 self.__vis.image(_obs_image, opts=opts, win=self.__image_window)
+            if self.__linear_grid_window is None:
+                self.__linear_grid_window = self.__vis.text(self._get_observation().__str__())
+            else:
+                self.__vis.text(self._get_observation().__str__(), win=self.__linear_grid_window)
         return _obs_image
 
 
 if __name__ == '__main__':
+    """ User interaction with the Environment"""
     vis = visdom.Visdom()
     env_fn = lambda: FruitCollection(vis=vis)
     for ep in range(5):
