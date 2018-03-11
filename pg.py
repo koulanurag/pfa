@@ -26,14 +26,12 @@ class PolicyGraident:
 
     def train(self, net, env_fn, net_path, plots_dir, args):
         optimizer = Adam(net.parameters(), lr=args.lr)
-        random.seed(args.seed)
 
         test_perf_data = []
         train_perf_data = []
         best = None
         n_trajectory_loss = []
         for episode in range(args.train_episodes):
-            random.seed(random.randint(1000, 100000))
             net.train()
             env = env_fn()
 
@@ -105,7 +103,6 @@ class PolicyGraident:
         net.eval()
         all_episode_rewards = 0
         for episode in range(episodes):
-            random.seed(episode)
             env = env_fn()
             done = False
             episode_reward = 0

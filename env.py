@@ -68,7 +68,7 @@ class FruitCollection:
         grid = np.zeros((self.grid_size[0], self.grid_size[1]))
         grid[self._agent_position[0], self._agent_position[1]] = 1
         fruit_vector = np.zeros(self.total_fruits)
-        fruit_vector[self._fruit_consumed] = 1
+        fruit_vector[[ not x for x in self._fruit_consumed]] = 1
         return np.concatenate((grid.reshape(self.grid_size[0] * self.grid_size[1]), fruit_vector))
 
     def reset(self):

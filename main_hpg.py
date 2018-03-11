@@ -1,6 +1,7 @@
 import argparse
 import os
 import torch
+import visdom
 import torch.nn as nn
 import torch.nn.functional as F
 from env import FruitCollection
@@ -13,13 +14,12 @@ class PolicyNet(nn.Module):
         super(PolicyNet, self).__init__()
         self.reward_types = reward_types
 
-        self.fc0 = nn.Linear(input_size, 256)
-        self.fc1 = nn.Linear(256, 64)
-
         for network_i in range(reward_types):
-            layer = nn.Sequential(nn.Linear(64, 32),
+            layer = nn.Sequential(nn.Linear(input_size, 256),
                                   nn.ReLU(),
-                                  nn.Linear(32, actions))
+                                  nn.Linear(256, 64),
+                                  nn.ReLU(),
+                                  nn.Linear(64, actions))
             setattr(self, 'policy_{}'.format(network_i), layer)
         self.actor_input_size = reward_types * actions
         self.actor_linear = nn.Linear(self.actor_input_size, actions)
@@ -28,11 +28,9 @@ class PolicyNet(nn.Module):
         self.actor_linear.bias.data.fill_(0)
 
     def forward(self, input):
-        x = F.relu(self.fc0(input))
-        x = F.relu(self.fc1(x))
         comb_policies = None
         for network_i in range(self.reward_types):
-            out = getattr(self, 'policy_{}'.format(network_i))(x)
+            out = getattr(self, 'policy_{}'.format(network_i))(input)
             if network_i == 0:
                 comb_policies = [out]
             else:
@@ -57,27 +55,31 @@ if __name__ == '__main__':
     parser.add_argument('--train_episodes', type=int, default=1500, help='Test')
     parser.add_argument('--test_episodes', type=int, default=100, help='Test')
     parser.add_argument('--lr', type=float, default=0.01, help='Test')
+    parser.add_argument('--scratch', action='store_true', help='scratch')
+    parser.add_argument('--decompose', action='store_true', help='Decompose reward type')
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
-    env_fn = lambda: FruitCollection(hybrid=True)
+    vis = visdom.Visdom()
+    env_fn = lambda: FruitCollection(hybrid=True, vis=vis)
     _env = env_fn()
     total_actions = _env.total_actions
     policy_net = PolicyNet(_env.reset().shape[0], total_actions, _env.total_fruits)
 
     # create directories to store results
     result_dir = ensure_directory_exits(os.path.join(os.getcwd(), 'results'))
-    env_dir = ensure_directory_exits(os.path.join(result_dir, _env.name, 'Hybrid_Pg'))
+    env_dir = ensure_directory_exits(os.path.join(result_dir, _env.name, 'Hybrid_Pg_decompose' if args.decompose else "Hybrid_Pg"))
     plots_dir = ensure_directory_exits(os.path.join(env_dir, 'Plots'))
     policy_net_path = os.path.join(env_dir, 'model.p')
 
     # Let the game begin !! Broom.. Broom..
     if args.cuda:
         policy_net = policy_net.cuda()
-    if os.path.exists(policy_net_path):
+    if os.path.exists(policy_net_path) and not args.scratch:
         policy_net.load_state_dict(torch.load(policy_net_path))
 
-    pg = HybridPolicyGraident(_env.total_fruits)
+
+    pg = HybridPolicyGraident(_env.total_fruits, args.decompose)
 
     if args.train:
         policy_net.train()
@@ -85,4 +87,4 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
     if args.test:
         policy_net.eval()
-        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, sleep=15))
+        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, sleep=1, render=True))

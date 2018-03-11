@@ -48,4 +48,4 @@ def weights_init(m):
         fan_out = weight_shape[0]
         w_bound = np.sqrt(6. / (fan_in + fan_out))
         m.weight.data.uniform_(-w_bound, w_bound)
-        m.bias.data.fill_(0)
+        m.bias.data.fill_(0.1)

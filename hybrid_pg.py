@@ -1,24 +1,33 @@
 import random
+import time
+
 import numpy as np
 import torch
 from torch.optim import Adam
 from torch.autograd import Variable
 from torch.distributions import Categorical
-
+from tools import plot_data
 
 class HybridPolicyGraident:
-    def __init__(self, reward_types):
+    def __init__(self, reward_types, decompose = False):
         self.reward_types = reward_types
+        self.decompose = decompose
+
+    def __get_plot_data_dict(self, train_data, test_data):
+        data_dict = [
+            {'title': "Train_Performance_vs_Epoch", 'data': train_data, 'y_label': 'Episode Reward', 'x_label': 'Time'},
+            {'title': "Test_Performance_vs_Epoch", 'data': test_data, 'y_label': 'Episode Reward', 'x_label': 'Time'},
+        ]
+        return data_dict
+
 
     def train(self, net, env_fn, net_path, plots_dir, args):
         optimizer = Adam(net.parameters(), lr=args.lr)
-        random.seed(args.seed)
 
         test_perf_data = []
         train_perf_data = []
         best = None
         for episode in range(args.train_episodes):
-            random.seed(random.randint(1000, 100000))
             net.train()
             env = env_fn()
 
@@ -74,8 +83,9 @@ class HybridPolicyGraident:
 
             optimizer.zero_grad()
             policy_loss = torch.cat(policy_loss).sum()
-            for type_i in range(self.reward_types):
-                policy_loss += torch.cat(policy_type_losses[type_i]).sum()
+            if self.decompose:
+                for type_i in range(self.reward_types):
+                    policy_loss += torch.cat(policy_type_losses[type_i]).sum()
             policy_loss.backward()
             optimizer.step()
             print('Episode:{} Reward:{} Length:{}'.format(episode, total_reward, len(ep_decomposed_rewards)))
@@ -89,6 +99,8 @@ class HybridPolicyGraident:
                     torch.save(net.state_dict(), net_path)
                     best = test_reward
                     print('Model Saved!')
+            if episode % 200 == 0:
+                plot_data(self.__get_plot_data_dict(train_perf_data, test_perf_data), plots_dir)
 
         return net
 
@@ -103,6 +115,8 @@ class HybridPolicyGraident:
             ep_actions = []  # just to exit early if the agent is stuck
             steps = 0
             while not done:
+                if render:
+                    env.render()
                 obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
                 action_probs, _ = net(obs)
                 action = int(np.argmax(action_probs.cpu().data.numpy()))
@@ -117,8 +131,10 @@ class HybridPolicyGraident:
                     ep_actions = [action]
                 else:
                     ep_actions.append(action)
+                time.sleep(sleep)
 
                 steps += 1
+            env.close()
             all_episode_rewards += episode_reward
             if log:
                 print('Test => Episode:{} Reward:{} Length:{}'.format(episode, episode_reward, steps))

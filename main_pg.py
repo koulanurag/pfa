@@ -38,9 +38,10 @@ if __name__ == '__main__':
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--train', action='store_true', default=False, help='Train')
     parser.add_argument('--test', action='store_true', default=False, help='Test')
-    parser.add_argument('--train_episodes', type=int, default=50000, help='Train Episode count')
+    parser.add_argument('--train_episodes', type=int, default=100000, help='Train Episode count')
     parser.add_argument('--test_episodes', type=int, default=100, help='Test Episode count')
     parser.add_argument('--lr', type=float, default=0.01, help='Test')
+    parser.add_argument('--scratch', action='store_true', help='scratch')
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     # Let the game begin !! Broom.. Broom..
     if args.cuda:
         policy_net = policy_net.cuda()
-    if os.path.exists(policy_net_path):
+    if os.path.exists(policy_net_path) and not args.scratch:
         policy_net.load_state_dict(torch.load(policy_net_path))
 
     pg = PolicyGraident()
