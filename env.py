@@ -17,12 +17,12 @@ class FruitCollection:
         self.name = 'FruitCollection'
         self.hybrid = hybrid
         self.grid_size = (10, 10)
-        self.max_steps = 100
+        self.max_steps = 300
         self.curr_step_count = 0
         self._fruit_positions = [(1, 0), (3, 1), (8, 2), (2, 3), (5, 4), (1, 5), (6, 6), (9, 7), (5, 8), (1, 9)]
         self.__vis = vis
         self.__image_window = None
-        self.reward_threshold = 5  # optimal reward possible
+        self.reward_threshold = 2 * 5  # optimal reward possible
         self.game_score = 0
         self.__linear_grid_window = None
         self.step_reward = 0
@@ -118,8 +118,8 @@ class FruitCollection:
     def render(self):
         _obs_image = self.__get_obs_image()
         if self.__vis is not None:
-            opts = dict(title='{}       Fruit Collected:{} Overall_Reward:{} Step Reward:{} Steps:{}'
-                        .format(self.name, self.fruit_collected, self.game_score, self.step_reward,
+            opts = dict(title='{}    \tFruit Collected:{} Overall_Reward:{} Step Reward:{} Steps:{}'
+                        .format(self.name, self.fruit_collected, round(self.game_score, 3), self.step_reward,
                                 self.curr_step_count),
                         width=500, height=500)
             if self.__image_window is None:

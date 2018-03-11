@@ -115,6 +115,8 @@ class PolicyGraident:
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
                 action = int(np.argmax(action_probs.cpu().data.numpy()[0]))
+                m = Categorical(action_probs)
+                action = m.sample().data[0]
                 obs, reward, done, info = env.step(action)
                 episode_reward += reward
 
