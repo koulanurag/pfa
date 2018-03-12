@@ -9,9 +9,17 @@ from torch.distributions import Categorical
 from tools import plot_data
 
 class HybridPolicyGraident:
-    def __init__(self, reward_types, decompose = False):
+    def __init__(self, reward_types, decompose = False, vis = None):
         self.reward_types = reward_types
         self.decompose = decompose
+        self.vis = vis
+        self.__prob_bar_window = {i: None for i in range(self.reward_types)}
+        self.__combined_prob_bar_window = None
+
+    def softmax(self, w, t = 1.0):
+        e = np.exp(w / t)
+        dist = e / np.sum(e)
+        return dist
 
     def __get_plot_data_dict(self, train_data, test_data):
         data_dict = [
@@ -149,12 +157,43 @@ class HybridPolicyGraident:
             ep_actions = []  # just to exit early if the agent is stuck
             steps = 0
             while not done:
-                if render:
-                    env.render()
                 obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
-                action_probs, _ = net(obs)
+                action_probs, typed_action_probs = net(obs)
                 m = Categorical(action_probs)
                 action = m.sample().data[0]
+
+                if render:
+                    env.render()
+                    for reward_type in range(self.reward_types):
+                        logits = typed_action_probs[reward_type].data.numpy()[0]
+                        probs = self.softmax(logits)
+                        x, y = env._fruit_positions[reward_type]
+
+                        if self.__prob_bar_window[reward_type] is None:
+                            self.__prob_bar_window[reward_type] = self.vis.bar(
+                                                        X = probs,
+                                                        opts = dict(rownames = ['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                                                    title   = "Action Prob for reward type ({}, {})".format(x, y))
+                                                    )
+                        else:
+                            self.vis.bar(X = probs,
+                                         opts = dict(rownames = ['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                                     title   = "Action Prob for reward type ({}, {})".format(x, y)
+                                                    ),
+                                         win = self.__prob_bar_window[reward_type])
+
+                    if self.__combined_prob_bar_window is None:
+                        self.__combined_prob_bar_window = self.vis.bar(
+                                                            X = action_probs.data.numpy(),
+                                                            opts = dict(rownames=['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                                                        title   = "Combined Action Prob")
+                                                        )
+                    else:
+                        self.vis.bar(X = action_probs.data.numpy(),
+                                     opts = dict(rownames =['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                                 title    = "Combined Action Prob"),
+                                     win = self.__combined_prob_bar_window)
+
                 obs, reward, done, info = env.step(action)
                 episode_reward += sum(reward)
 

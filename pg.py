@@ -14,7 +14,9 @@ class PolicyGraident:
     Implementation Reference : https://github.com/pytorch/examples/blob/master/reinforcement_learning/reinforce.py
     """
 
-    def __init__(self):
+    def __init__(self, vis = None):
+        self.vis = vis
+        self.__prob_bar_window = None
         pass
 
     def __get_plot_data_dict(self, train_data, test_data):
@@ -46,7 +48,7 @@ class PolicyGraident:
                 action_probs = net(obs)
                 m = Categorical(action_probs)
                 action = m.sample()
-                log_probs.append(m.log_prob(action))
+                log_probs.append(m.log_prob(Variable(action.data)))
 
                 action = int(action.data[0])
                 obs, reward, done, info = env.step(action)
@@ -110,13 +112,23 @@ class PolicyGraident:
             ep_actions = []  # just to exit early if the agent is stuck
             steps = 0
             while not done:
-                if render:
-                    env.render()
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
-                action = int(np.argmax(action_probs.cpu().data.numpy()[0]))
                 m = Categorical(action_probs)
                 action = m.sample().data[0]
+
+                if render:
+                    env.render()
+                    if self.__prob_bar_window is None:
+                        self.__prob_bar_window = self.vis.bar(
+                                                    X = action_probs.data.numpy()[0],
+                                                    opts = dict(rownames=['UP', 'RIGHT', 'DOWN', 'LEFT'])
+                                                )
+                    else:
+                        self.vis.bar(X = action_probs.data.numpy()[0],
+                                     opts = dict(rownames=['UP', 'RIGHT', 'DOWN', 'LEFT']),
+                                     win = self.__prob_bar_window)
+
                 obs, reward, done, info = env.step(action)
                 episode_reward += reward
 
@@ -135,4 +147,6 @@ class PolicyGraident:
             all_episode_rewards += episode_reward
             if log:
                 print('Test => Episode:{} Reward:{} Length:{}'.format(episode, episode_reward, steps))
+            if render:
+                self.vis.close(win=self.__prob_bar_window)
         return all_episode_rewards / episodes

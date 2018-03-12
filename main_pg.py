@@ -38,7 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_cuda', action='store_true', default=False, help='Disables Cuda Usage')
     parser.add_argument('--train', action='store_true', default=False, help='Train the network')
     parser.add_argument('--test', action='store_true', default=False, help='Test the network')
-    parser.add_argument('--train_episodes', type=int, default=100000, help='Episode count for training')
+    parser.add_argument('--train_episodes', type=int, default=200000, help='Episode count for training')
     parser.add_argument('--test_episodes', type=int, default=100, help='Episode count for testing')
     parser.add_argument('--lr', type=float, default=0.01, help='Learning Rate for Training (Adam Optimizer)')
     parser.add_argument('--scratch', action='store_true', default=False,
@@ -46,7 +46,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
-    env_fn = lambda: FruitCollection(vis=visdom.Visdom() if args.render else None)
+    vis = visdom.Visdom() if args.render else None
+
+    env_fn = lambda: FruitCollection(vis = vis)
     _env = env_fn()
     total_actions = _env.total_actions
     obs = _env.reset()
@@ -65,7 +67,7 @@ if __name__ == '__main__':
     if os.path.exists(policy_net_path) and not args.scratch:
         policy_net.load_state_dict(torch.load(policy_net_path))
 
-    pg = PolicyGraident()
+    pg = PolicyGraident(vis)
 
     if args.train:
         policy_net.train()

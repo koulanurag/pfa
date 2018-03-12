@@ -113,6 +113,10 @@ class FruitCollection:
                 img[0, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 91
                 img[1, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 226
                 img[2, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 116
+            else:
+                img[0, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 0
+                img[1, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 0
+                img[2, self._fruit_positions[i][0], self._fruit_positions[i][1]] = 0
         return img
 
     def render(self):

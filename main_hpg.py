@@ -4,6 +4,7 @@ import torch
 import visdom
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 from env import FruitCollection
 from tools import ensure_directory_exits, weights_init, normalized_columns_initializer
 from hybrid_pg import HybridPolicyGraident
@@ -31,12 +32,15 @@ class PolicyNet(nn.Module):
         comb_policies = None
         for network_i in range(self.reward_types):
             out = getattr(self, 'policy_{}'.format(network_i))(input)
+            # out = F.softmax(out)
             if network_i == 0:
                 comb_policies = [out]
             else:
                 comb_policies.append(out)
         comb_policies = torch.stack(comb_policies)
-        x = comb_policies.view(self.actor_input_size)
+        x = F.softmax(comb_policies, dim = 2)
+        x = x.view(self.actor_input_size)
+        x = Variable(x.data)
         prob = F.softmax(self.actor_linear(x), dim=0)
         return prob, comb_policies
 
@@ -52,15 +56,19 @@ if __name__ == '__main__':
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--train', action='store_true', default=False, help='Train')
     parser.add_argument('--test', action='store_true', default=False, help='Test')
-    parser.add_argument('--train_episodes', type=int, default=1500, help='Test')
+    parser.add_argument('--train_episodes', type=int, default=100000, help='Test')
     parser.add_argument('--test_episodes', type=int, default=100, help='Test')
     parser.add_argument('--lr', type=float, default=0.01, help='Test')
     parser.add_argument('--scratch', action='store_true', help='scratch')
     parser.add_argument('--decompose', action='store_true', help='Decompose reward type')
+    parser.add_argument('--sleep', type=int, help='Sleep time for render', default=1)
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
-    env_fn = lambda: FruitCollection(hybrid=True, vis=visdom.Visdom() if args.render else None)
+    vis = visdom.Visdom() if args.render else None
+
+    env_fn = lambda: FruitCollection(hybrid=True, vis = vis)
+
     _env = env_fn()
     total_actions = _env.total_actions
     policy_net = PolicyNet(_env.reset().shape[0], total_actions, _env.total_fruits)
@@ -78,7 +86,7 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
 
 
-    pg = HybridPolicyGraident(_env.total_fruits, args.decompose)
+    pg = HybridPolicyGraident(_env.total_fruits, args.decompose, vis)
 
     if args.train:
         policy_net.train()
@@ -86,4 +94,4 @@ if __name__ == '__main__':
         policy_net.load_state_dict(torch.load(policy_net_path))
     if args.test:
         policy_net.eval()
-        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, sleep=1, render=True))
+        print('Average Performance:', pg.test(policy_net, env_fn, args.test_episodes, log=True, sleep=args.sleep, render=True))
