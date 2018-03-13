@@ -18,8 +18,6 @@ class PolicyNet(nn.Module):
         for network_i in range(reward_types):
             layer = nn.Sequential(nn.Linear(input_size, 50),
                                   nn.ReLU(),
-                                  # nn.Linear(50, 50),
-                                  # nn.ReLU(),
                                   nn.Linear(50, actions))
             setattr(self, 'policy_{}'.format(network_i), layer)
         self.actor_input_size = reward_types * actions

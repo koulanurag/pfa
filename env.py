@@ -17,9 +17,10 @@ class FruitCollection:
         self.name = 'FruitCollection'
         self.hybrid = hybrid
         self.grid_size = (10, 10)
-        self.max_steps = 300
+        self.max_steps = 100
         self.curr_step_count = 0
         self._fruit_positions = [(1, 0), (3, 1), (8, 2), (2, 3), (5, 4), (1, 5), (6, 6), (9, 7), (5, 8), (1, 9)]
+        self._agent_position = [5,5]
         self.__vis = vis
         self.__image_window = None
         self.reward_threshold = 2 * 5  # optimal reward possible
@@ -49,9 +50,10 @@ class FruitCollection:
         if action >= self.total_actions:
             raise ValueError("action must be one of %r" % range(self.total_actions))
         if self.hybrid:
-            reward = [ 0 if consumed else -0.004 for consumed in self._fruit_consumed]
+            # reward = [0 if consumed else 1 for consumed in self._fruit_consumed]
+            reward = [0 for _ in range(self.total_fruits)]
         else:
-            reward = -0.02
+            reward = 0
         self.curr_step_count += 1
         if self.__move(action):
             if tuple(self._agent_position) in self._fruit_positions:
@@ -59,9 +61,9 @@ class FruitCollection:
                 if not self._fruit_consumed[idx]:
                     self._fruit_consumed[idx] = True
                     if self.hybrid:
-                        reward[idx] = 2
+                        reward[idx] = 1
                     else:
-                        reward = 2
+                        reward = 1
                     self.fruit_collected += 1
 
         done = (False not in self._fruit_consumed) or (self.curr_step_count > self.max_steps)
@@ -82,10 +84,10 @@ class FruitCollection:
         self.game_score = 0
         available_fruits_loc = random.sample(range(self.total_fruits), self.visible_fruits)
         self._fruit_consumed = [(False if (i in available_fruits_loc) else True) for i in range(self.total_fruits)]
-        while True:
-            self._agent_position = [random.randint(0, 9), random.randint(0, 9)]
-            if tuple(self._agent_position) not in self._fruit_positions:
-                break
+        # while True:
+        #     self._agent_position = [random.randint(0, 9), random.randint(0, 9)]
+        #     if tuple(self._agent_position) not in self._fruit_positions:
+        #         break
         obs = self._get_observation()
         return obs
 

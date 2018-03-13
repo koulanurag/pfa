@@ -14,7 +14,7 @@ class FruitCollection:
         self.total_actions = 2
         self._fruit_consumed = None
         self._agent_position = None
-        self.name = 'FruitCollection_simple'
+        self.name = 'FruitCollection_Simple'
         self.hybrid = hybrid
         self.grid_size = (1, 10)
         self.max_steps = 20
@@ -27,6 +27,7 @@ class FruitCollection:
         self.__linear_grid_window = None
         self.step_reward = 0
         self.fruit_collected = 0
+        self.get_action_meanings = ['Right', 'Left']
 
     def __move(self, action):
         agent_pos = None
@@ -45,9 +46,9 @@ class FruitCollection:
         if action >= self.total_actions:
             raise ValueError("action must be one of %r" % range(self.total_actions))
         if self.hybrid:
-            reward = [ 0 if consumed else -0.004 for consumed in self._fruit_consumed]
+            reward = [0 for _ in self._fruit_consumed]
         else:
-            reward = -0.02
+            reward = 0
         self.curr_step_count += 1
         if self.__move(action):
             if tuple(self._agent_position) in self._fruit_positions:
@@ -55,9 +56,9 @@ class FruitCollection:
                 if not self._fruit_consumed[idx]:
                     self._fruit_consumed[idx] = True
                     if self.hybrid:
-                        reward[idx] = 2
+                        reward[idx] = 1
                     else:
-                        reward = 2
+                        reward = 1
                     self.fruit_collected += 1
 
         done = (False not in self._fruit_consumed) or (self.curr_step_count > self.max_steps)
@@ -72,15 +73,15 @@ class FruitCollection:
         grid[self._agent_position[0], self._agent_position[1]] = 1
         fruit_vector = np.zeros(self.total_fruits)
         fruit_vector[[not x for x in self._fruit_consumed]] = 1
-        # return np.concatenate((grid.reshape(self.grid_size[0] * self.grid_size[1]), fruit_vector))
-        return fruit_vector
+        return np.concatenate((grid.reshape(self.grid_size[0] * self.grid_size[1]), fruit_vector))
+        # return fruit_vector
 
     def reset(self):
         self.game_score = 0
         available_fruits_loc = random.sample(range(self.total_fruits), self.visible_fruits)
         self._fruit_consumed = [(False if (i in available_fruits_loc) else True) for i in range(self.total_fruits)]
         while True:
-            self._agent_position = [0, 5]
+            self._agent_position = [0, 4]
             if tuple(self._agent_position) not in self._fruit_positions:
                 break
         obs = self._get_observation()
