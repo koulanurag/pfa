@@ -19,7 +19,14 @@ class HybridActorCritic:
         self.decompose = decompose
         self.vis = vis
         self.__prob_bar_window = {i: None for i in range(self.reward_types)}
+        self.__value_bar_window = {i: None for i in range(self.reward_types)}
         self.__combined_prob_bar_window = None
+
+    def softmax(self, w, t = 1.0):
+        e = np.exp(w / t)
+        dist = e / np.sum(e)
+        return dist
+
 
     def __get_plot_data_dict(self, train_data, test_data):
         data_dict = [
@@ -77,6 +84,7 @@ class HybridActorCritic:
                 critic_loss = 0
                 for trajectory_info in n_trajectory_info:
                     obs, _decomposed_reward, _type_critic_info, _, _ = trajectory_info
+                    # import pdb; pdb.set_trace()
                     for step_i in range(len(obs)):
                         for i, r in enumerate(_decomposed_reward[step_i]):
                             critic = _type_critic_info[i][step_i]
@@ -93,6 +101,7 @@ class HybridActorCritic:
                 actor_loss = 0
                 for trajectory_info in n_trajectory_info:
                     obs, _decomposed_reward, _, _type_log_probs, _ = trajectory_info
+                    # import pdb; pdb.set_trace()
                     for i in range(len(obs)):
                         _, _, type_v_state = net(Variable(torch.FloatTensor(obs[i].tolist())).unsqueeze(0))
                         if i != len(obs) - 1:
@@ -144,22 +153,54 @@ class HybridActorCritic:
             steps = 0
             while not done:
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
-                action_probs, _, _ = net(obs)
+                action_probs, typed_action_probs, reward_type_critic = net(obs)
                 # print(action_probs, critic)
                 m = Categorical(action_probs)
                 action = m.sample().data[0]
 
                 if render:
                     env.render()
-                    if self.__prob_bar_window is None:
-                        self.__prob_bar_window = self.vis.bar(
-                            X=action_probs.data.numpy()[0],
-                            opts=dict(rownames=env.get_action_meanings)
-                        )
+                    for reward_type in range(self.reward_types):
+                        logits = typed_action_probs[reward_type].data.numpy()[0]
+                        probs = self.softmax(logits)
+                        x, y = env._fruit_positions[reward_type]
+
+                        if self.__prob_bar_window[reward_type] is None:
+                            self.__prob_bar_window[reward_type] = self.vis.bar(
+                                                        X = probs,
+                                                        opts = dict(rownames = ['RIGHT', 'LEFT'],
+                                                                    title   = "Action Prob for reward type ({}, {})".format(x, y))
+                                                    )
+                        else:
+                            self.vis.bar(X = probs,
+                                         opts = dict(rownames = ['RIGHT', 'LEFT'],
+                                                     title   = "Action Prob for reward type ({}, {})".format(x, y)
+                                                    ),
+                                         win = self.__prob_bar_window[reward_type])
+                        #VAlue estimate
+                        print(reward_type_critic[reward_type])
+                        value = [reward_type_critic[reward_type].data.numpy()[0].tolist()[0], 0]
+                        if self.__value_bar_window[reward_type] is None:
+                            self.__value_bar_window[reward_type] = self.vis.bar(
+                                                        X = value,
+                                                        opts = dict(title   = "Value for reward type ({}, {})".format(x, y))
+                                                    )
+                        else:
+                            self.vis.bar(X = value,
+                                         opts = dict(title   = "Value for reward type ({}, {})".format(x, y)),
+                                         win = self.__value_bar_window[reward_type])
+
+                    if self.__combined_prob_bar_window is None:
+                        self.__combined_prob_bar_window = self.vis.bar(
+                                                            X = action_probs.data.numpy(),
+                                                            opts = dict(rownames=['RIGHT', 'LEFT'],
+                                                                        title   = "Combined Action Prob")
+                                                        )
                     else:
-                        self.vis.bar(X=action_probs.data.numpy()[0],
-                                     opts=dict(rownames=env.get_action_meanings),
-                                     win=self.__prob_bar_window)
+                        self.vis.bar(X = action_probs.data.numpy(),
+                                     opts = dict(rownames =['RIGHT', 'LEFT'],
+                                                 title    = "Combined Action Prob"),
+                                     win = self.__combined_prob_bar_window)
 
                 obs, reward, done, info = env.step(action)
                 episode_reward += sum(reward)

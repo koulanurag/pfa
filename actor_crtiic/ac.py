@@ -17,6 +17,7 @@ class ActorCritic:
     def __init__(self, vis=None):
         self.vis = vis
         self.__prob_bar_window = None
+        self.__value_bar_window = None
 
     def __get_plot_data_dict(self, train_data, test_data):
         data_dict = [
@@ -149,6 +150,18 @@ class ActorCritic:
                         self.vis.bar(X=action_probs.data.numpy()[0],
                                      opts=dict(rownames=env.get_action_meanings),
                                      win=self.__prob_bar_window)
+
+                    #Value estimate
+                    value = [critic.data.numpy()[0].tolist()[0], 0]
+                    if self.__value_bar_window is None:
+                        self.__value_bar_window = self.vis.bar(
+                                                    X = value,
+                                                    opts = dict(title   = "Value for state")
+                                                )
+                    else:
+                        self.vis.bar(X = value,
+                                     opts = dict(title   = "Value for state"),
+                                     win = self.__value_bar_window)
 
                 obs, reward, done, info = env.step(action)
                 episode_reward += reward

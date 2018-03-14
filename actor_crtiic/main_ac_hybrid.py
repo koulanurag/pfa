@@ -31,6 +31,8 @@ class HybridActorCriticNet(nn.Module):
             getattr(self, 'critic_{}'.format(network_i)).weight.data.fill_(0)
             getattr(self, 'critic_{}'.format(network_i)).bias.data.fill_(0)
             getattr(self, 'actor_{}'.format(network_i)).bias.data.fill_(0)
+            actor_weight = getattr(self, 'actor_{}'.format(network_i)).weight.data
+            getattr(self, 'actor_{}'.format(network_i)).weight.data = normalized_columns_initializer(actor_weight, 0.01)
 
         for actor_i in range(actions):
             getattr(self, 'overall_action_{}'.format(actor_i)).bias.data.fill_(0)
