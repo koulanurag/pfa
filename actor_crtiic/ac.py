@@ -72,6 +72,7 @@ class ActorCritic:
                     obs, _rewards, _critic_info, _log_probs = trajectory_info
                     for i, r in enumerate(_rewards):
                         critic = _critic_info[i]
+
                         if i != len(_rewards) - 1:
                             target_critic = r + Variable(_critic_info[i + 1].data)
                         else:

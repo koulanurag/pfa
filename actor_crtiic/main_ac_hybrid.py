@@ -55,11 +55,12 @@ class HybridActorCriticNet(nn.Module):
                 comb_policies.append(actor)
                 comb_critic.append(critic)
         comb_policies = torch.stack(comb_policies)
+        comb_critic = torch.stack(comb_critic)
 
         actor = []
         for act_i in range(self.actions):
             action_input = comb_policies[:, :, act_i]
-            action_input = Variable(action_input.data).resize(1,self.reward_types)
+            action_input = Variable(action_input.data).resize(1, self.reward_types)
             actor.append(getattr(self, 'overall_action_{}'.format(act_i))(action_input))
         actor = torch.stack(actor)
         actor = actor.view(self.actions)

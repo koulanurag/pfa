@@ -1,5 +1,6 @@
 import random
 import time
+import sys
 import numpy as np
 import torch
 import torch.nn as nn
@@ -14,7 +15,8 @@ class ActorHybridCritic:
     Actor Critic Implementation
     """
 
-    def __init__(self, vis=None):
+    def __init__(self, vis=None, reward_types=1):
+        self.reward_types = reward_types
         self.vis = vis
         self.__prob_bar_window = None
         self.__value_bar_window = None
@@ -59,10 +61,9 @@ class ActorHybridCritic:
                 obs, reward, done, info = env.step(action)
                 ep_rewards.append(reward)
                 critic_info.append(critic)
-                total_reward += reward
+                total_reward += sum(reward)
             train_perf_data.append(total_reward)
             n_trajectory_info.append((ep_obs, ep_rewards, critic_info, log_probs))
-
             # Update the network after collecting n trajectories
             if episode % args.batch_size == 0:
 
@@ -70,12 +71,15 @@ class ActorHybridCritic:
                 critic_loss = 0
                 for trajectory_info in n_trajectory_info:
                     obs, _rewards, _critic_info, _log_probs = trajectory_info
-                    for i, r in enumerate(_rewards):
+                    for i in range(len(obs)):
                         critic = _critic_info[i]
-                        if i != len(_rewards) - 1:
-                            target_critic = r + Variable(_critic_info[i + 1].data)
-                        else:
-                            target_critic = Variable(torch.Tensor([[r]]))
+                        target_critic = []
+                        for r_i, r in enumerate(_rewards[i]):
+                            if i != len(obs) - 1:
+                                target_critic.append(r + args.gamma * _critic_info[i + 1].data.numpy()[0][r_i])
+                            else:
+                                target_critic.append(r)
+                        target_critic = Variable(torch.FloatTensor(target_critic)).unsqueeze(0)
                         critic_loss += mse_loss(critic, target_critic)
                 critic_loss = critic_loss / args.batch_size
                 critic_loss.backward(retain_graph=True)
@@ -85,15 +89,18 @@ class ActorHybridCritic:
                 actor_loss = 0
                 for trajectory_info in n_trajectory_info:
                     obs, _rewards, _critic_info, _log_probs = trajectory_info
-                    for i, r in enumerate(_rewards):
+                    for i in range(len(obs)):
                         _, v_state = net(Variable(torch.FloatTensor(obs[i].tolist())).unsqueeze(0))
-                        v_state = Variable(v_state.data)
+                        v_state = v_state.data.numpy()[0]
                         if i != len(_rewards) - 1:
                             _, v_next_state = net(Variable(torch.FloatTensor(obs[i + 1].tolist())).unsqueeze(0))
-                            v_next_state = Variable(v_next_state.data)
+                            v_next_state = v_next_state.data.numpy()[0]
                         else:
-                            v_next_state = 0
-                        advantage = r + v_next_state - v_state
+                            v_next_state = [0 for _ in range(len(_rewards))]
+
+                        advantage = 0
+                        for r_i, r in enumerate(_rewards[i]):
+                            advantage += r + args.gamma * v_next_state[r_i] - v_state[r_i]
                         actor_loss -= _log_probs[i] * advantage
 
                 actor_loss = actor_loss / args.batch_size
@@ -121,6 +128,29 @@ class ActorHybridCritic:
         return net
 
     def test(self, net, env_fn, episodes, log=False, render=False, sleep=0):
+        pause, stop = False, False
+        # if render:
+        #     pause = True
+        #     stop = False
+        #     txt = 'Press Enter to Make Next Step'
+        #     callback_text_window = self.vis.text(txt)
+        #
+        #     def type_callback(event):
+        #         global pause, stop
+        #         if event['event_type'] == 'KeyPress':
+        #             curr_txt = event['pane_data']['content']
+        #             if event['key'] == 'Enter':
+        #                 pause = False
+        #                 sleep(1)
+        #                 curr_txt += '<br>' + 'Press Enter to Make Next Step / BackSpace to Stop the game'
+        #                 pause = True
+        #             elif event['key'] == 'Backspace':
+        #                 curr_txt += '<br>' + 'Stopped!'
+        #                 stop = True
+        #             self.vis.text(curr_txt, win=callback_text_window)
+        #
+        #     self.vis.register_event_handler(type_callback, callback_text_window)
+
         net.eval()
         all_episode_rewards = 0
         for episode in range(episodes):
@@ -133,7 +163,6 @@ class ActorHybridCritic:
             while not done:
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs, critic = net(obs)
-                # print(action_probs, critic)
                 m = Categorical(action_probs)
                 action = m.sample().data[0]
 
@@ -142,27 +171,33 @@ class ActorHybridCritic:
                     if self.__prob_bar_window is None:
                         self.__prob_bar_window = self.vis.bar(
                             X=action_probs.data.numpy()[0],
-                            opts=dict(rownames=env.get_action_meanings)
+                            opts=dict(rownames=env.get_action_meanings, title="Action Prob")
                         )
                     else:
                         self.vis.bar(X=action_probs.data.numpy()[0],
-                                     opts=dict(rownames=env.get_action_meanings),
+                                     opts=dict(rownames=env.get_action_meanings, title="Action Prob"),
                                      win=self.__prob_bar_window)
 
                     # Value estimate
-                    value = [critic.data.numpy()[0].tolist()[0], 0]
+                    value = critic.data.numpy()[0].reshape(net.reward_types, 1).tolist()
                     if self.__value_bar_window is None:
                         self.__value_bar_window = self.vis.bar(
                             X=value,
-                            opts=dict(title="Value for state")
+                            opts=dict(title="Value for state", stacked=False, rownames=[str(i) for i in range(net.reward_types)])
                         )
                     else:
                         self.vis.bar(X=value,
-                                     opts=dict(title="Value for state"),
+                                     opts=dict(title="Value for state", stacked=False,
+                                               rownames=[str(i) for i in range(net.reward_types)]),
                                      win=self.__value_bar_window)
+                    # to control the environment
+                    while pause and not stop:
+                        time.sleep(0.5)
+                    if stop:
+                        sys.exit(0)
 
                 obs, reward, done, info = env.step(action)
-                episode_reward += reward
+                episode_reward += sum(reward)
 
                 # exit if stuck
                 if len(ep_actions) > 100:  # same action being taken continuously for last n steps

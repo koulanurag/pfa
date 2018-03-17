@@ -4,7 +4,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from actor_crtiic.env import FruitCollection
+from actor_crtiic.fruit_collection_2d import FruitCollection2D
 from actor_crtiic.tools import ensure_directory_exits, weights_init, normalized_columns_initializer
 from actor_crtiic.ac import ActorCritic
 
@@ -12,7 +12,7 @@ from actor_crtiic.ac import ActorCritic
 class ActorCriticNet(nn.Module):
     def __init__(self, input_size, actions):
         super(ActorCriticNet, self).__init__()
-        self.fc0 = nn.Linear(input_size, 256)
+        self.fc0 = nn.Linear(input_size,  )
         self.fc1 = nn.Linear(256, 64)
         self.actor_linear = nn.Linear(64, actions)
         self.critic_linear = nn.Linear(64, 1)
@@ -53,7 +53,7 @@ if __name__ == '__main__':
 
     vis = visdom.Visdom() if args.render else None
 
-    env_fn = lambda: FruitCollection(vis=vis)
+    env_fn = lambda: FruitCollection2D(vis=vis)
     _env = env_fn()
     total_actions = _env.total_actions
     obs = _env.reset()

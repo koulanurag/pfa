@@ -4,10 +4,9 @@ import torch
 import visdom
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
-from envs import FruitCollection1D
+from envs import FruitCollection1D, FruitCollection2D
 from tools import ensure_directory_exits, weights_init, normalized_columns_initializer
-from critic_decomposition.actor_decomposed_critic import HybridActorCritic as HAC
+from critic_decomposition.actor_decomposed_critic import ActorHybridCritic as AHC
 
 
 class ActorHybridCriticNet(nn.Module):
@@ -21,7 +20,7 @@ class ActorHybridCriticNet(nn.Module):
 
         self.apply(weights_init)
         self.decomposed_critic.weight.data.fill_(0)
-        self.decomposed_critic.weight.bias.fill_(0)
+        self.decomposed_critic.bias.data.fill_(0)
         self.actor.bias.data.fill_(0)
         self.actor.weight.data = normalized_columns_initializer(self.actor.weight.data, 0.01)
 
@@ -35,7 +34,7 @@ class ActorHybridCriticNet(nn.Module):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' Policy Fusion Architecture - PyTorch')
-    parser.add_argument('--gamma', type=float, default=0.99, metavar='G', help='discount factor (default: 0.99)')
+    parser.add_argument('--gamma', type=float, default=0.95, metavar='G', help='discount factor (default: 0.99)')
     parser.add_argument('--seed', type=int, default=10, metavar='N', help='random seed (default: 543)')
     parser.add_argument('--render', action='store_true', help='render the environment')
     parser.add_argument('--hybrid', action='store_true', help='use hybrid reward')
@@ -44,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--train', action='store_true', default=False, help='Train')
     parser.add_argument('--test', action='store_true', default=False, help='Test')
-    parser.add_argument('--train_episodes', type=int, default=1000, help='Test')
+    parser.add_argument('--train_episodes', type=int, default=3000, help='Test')
     parser.add_argument('--test_episodes', type=int, default=100, help='Test')
     parser.add_argument('--lr', type=float, default=0.01, help='Test')
     parser.add_argument('--scratch', action='store_true', help='scratch')
@@ -73,13 +72,13 @@ if __name__ == '__main__':
     if os.path.exists(net_path) and not args.scratch:
         net.load_state_dict(torch.load(net_path))
 
-    hac = HAC(_env.total_fruits, args.decompose, vis)
+    hac = AHC(vis)
 
     if args.train:
         net.train()
-    net = hac.train(net, env_fn, net_path, plots_dir, args)
-    net.load_state_dict(torch.load(net_path))
+        net = hac.train(net, env_fn, net_path, plots_dir, args)
+        net.load_state_dict(torch.load(net_path))
     if args.test:
         net.eval()
-    print('Average Performance:',
-          hac.test(net, env_fn, args.test_episodes, log=True, sleep=args.sleep, render=True))
+        print('Average Performance:',
+              hac.test(net, env_fn, args.test_episodes, log=True, sleep=args.sleep, render=args.render))
