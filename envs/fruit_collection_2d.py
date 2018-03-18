@@ -10,18 +10,19 @@ class FruitCollection2D:
 
     def __init__(self, vis=None, hybrid=False):
         self.total_fruits = 10
-        self.visible_fruits = 10
+        self.visible_fruits = 5
         self.total_actions = 4
         self._fruit_consumed = None
         self._agent_position = None
         self.name = 'FruitCollection2D'
         self.hybrid = hybrid
         self.grid_size = (10, 10)
-        self.max_steps = 300
+        self.max_steps = 200
         self.curr_step_count = 0
         self._fruit_positions = [(1, 0), (3, 1), (8, 2), (2, 3), (5, 4), (1, 5), (6, 6), (9, 7), (5, 8), (1, 9)]
+        # self._fruit_positions = [(0, 0), (0, 5), (5, 0), (5, 5)]
         # self._fruit_position_color = []
-        self._agent_position = [4, 4]
+        self._agent_position = [2, 2]
         self.__vis = vis
         self.__image_window = None
         self.reward_threshold = 10  # optimal reward possible
@@ -53,7 +54,7 @@ class FruitCollection2D:
             raise ValueError("action must be one of %r" % range(self.total_actions))
         if self.hybrid:
             # reward = [0 if consumed else 1 for consumed in self._fruit_consumed]
-            reward = [0  for _ in range(self.total_fruits)]
+            reward = [0 for _ in range(self.total_fruits)]
         else:
             reward = 0
         self.curr_step_count += 1
@@ -129,7 +130,7 @@ class FruitCollection2D:
             opts = dict(title='{}    \tFruit Collected:{} Overall_Reward:{} Step Reward:{} Steps:{}'
                         .format(self.name, self.fruit_collected, round(self.game_score, 3), self.step_reward,
                                 self.curr_step_count),
-                        width=500, height=500)
+                        width=400, height=400)
             if self.__image_window is None:
                 self.__image_window = self.__vis.image(_obs_image, opts=opts)
             else:

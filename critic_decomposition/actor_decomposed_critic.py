@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.autograd import Variable
+import torch.nn.functional as F
 from torch.distributions import Categorical
 from tools import plot_data
 
@@ -49,28 +50,37 @@ class ActorHybridCritic:
             critic_info = []
             ep_obs = []
             obs = env.reset()
+            entropies = []
             while not done:
                 ep_obs.append(obs)
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
-                action_probs, critic = net(obs)
+                logit, critic = net(obs)
+
+                action_probs = F.softmax(logit)
+                action_log_prob = F.log_softmax(logit)
+                entropy = -(action_log_prob * action_probs).sum(1)
+                entropies.append(entropy)
+
                 m = Categorical(action_probs)
                 action = m.sample()
                 log_probs.append(m.log_prob(Variable(action.data)))
-
                 action = int(action.data[0])
+
                 obs, reward, done, info = env.step(action)
                 ep_rewards.append(reward)
                 critic_info.append(critic)
                 total_reward += sum(reward)
             train_perf_data.append(total_reward)
-            n_trajectory_info.append((ep_obs, ep_rewards, critic_info, log_probs))
+            n_trajectory_info.append((ep_obs, ep_rewards, critic_info, log_probs, entropies))
+
             # Update the network after collecting n trajectories
             if episode % args.batch_size == 0:
-
+                # critic update
+                # TODO: Optimize critic update by calculating MSE once for everything
                 optimizer.zero_grad()
                 critic_loss = 0
                 for trajectory_info in n_trajectory_info:
-                    obs, _rewards, _critic_info, _log_probs = trajectory_info
+                    obs, _rewards, _critic_info, _log_probs, _ = trajectory_info
                     for i in range(len(obs)):
                         critic = _critic_info[i]
                         target_critic = []
@@ -88,7 +98,8 @@ class ActorHybridCritic:
                 optimizer.zero_grad()
                 actor_loss = 0
                 for trajectory_info in n_trajectory_info:
-                    obs, _rewards, _critic_info, _log_probs = trajectory_info
+                    obs, _rewards, _critic_info, _log_probs, _entropies = trajectory_info
+                    # gae = [0 for _ in range(self.reward_types)]
                     for i in range(len(obs)):
                         _, v_state = net(Variable(torch.FloatTensor(obs[i].tolist())).unsqueeze(0))
                         v_state = v_state.data.numpy()[0]
@@ -101,7 +112,7 @@ class ActorHybridCritic:
                         advantage = 0
                         for r_i, r in enumerate(_rewards[i]):
                             advantage += r + args.gamma * v_next_state[r_i] - v_state[r_i]
-                        actor_loss -= _log_probs[i] * advantage
+                        actor_loss -= _log_probs[i] * advantage - args.beta * _entropies[i]
 
                 actor_loss = actor_loss / args.batch_size
                 actor_loss.backward()
@@ -128,6 +139,7 @@ class ActorHybridCritic:
         return net
 
     def test(self, net, env_fn, episodes, log=False, render=False, sleep=0):
+        net.eval()
         pause, stop = False, False
         # if render:
         #     pause = True
@@ -162,19 +174,19 @@ class ActorHybridCritic:
             steps = 0
             while not done:
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
-                action_probs, critic = net(obs)
-                m = Categorical(action_probs)
-                action = m.sample().data[0]
+                logits, critic = net(obs)
+                prob = F.softmax(logits)
+                action = int(prob.max(1)[1].data.numpy()[0])
 
                 if render:
                     env.render()
                     if self.__prob_bar_window is None:
                         self.__prob_bar_window = self.vis.bar(
-                            X=action_probs.data.numpy()[0],
+                            X=prob.data.numpy()[0],
                             opts=dict(rownames=env.get_action_meanings, title="Action Prob")
                         )
                     else:
-                        self.vis.bar(X=action_probs.data.numpy()[0],
+                        self.vis.bar(X=prob.data.numpy()[0],
                                      opts=dict(rownames=env.get_action_meanings, title="Action Prob"),
                                      win=self.__prob_bar_window)
 
@@ -183,7 +195,8 @@ class ActorHybridCritic:
                     if self.__value_bar_window is None:
                         self.__value_bar_window = self.vis.bar(
                             X=value,
-                            opts=dict(title="Value for state", stacked=False, rownames=[str(i) for i in range(net.reward_types)])
+                            opts=dict(title="Value for state", stacked=False,
+                                      rownames=[str(i) for i in range(net.reward_types)])
                         )
                     else:
                         self.vis.bar(X=value,

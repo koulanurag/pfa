@@ -22,7 +22,7 @@ class FruitCollection1D:
         self._fruit_positions = [(0, 0), (0, 9)]
         self.__vis = vis
         self.__image_window = None
-        self.reward_threshold = 1  # optimal reward possible
+        self.reward_threshold = 5  # optimal reward possible
         self.game_score = 0
         self.__linear_grid_window = None
         self.step_reward = 0
