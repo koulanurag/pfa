@@ -1,7 +1,7 @@
 # Policy Fusion Architecture - Pytorch
 
 ## Installation
- * Install [Pytorch](http://pytorch.org/) - (Platform dependent)
+ * Install [Pytorch](http://pytorch.org/) [Version : 0.3.1] - (Platform dependent)
  * To install other requirements:
     ```sh
         pip install -r requirements.txt

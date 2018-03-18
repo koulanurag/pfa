@@ -38,7 +38,7 @@ class ActorHybridCriticNet(nn.Module):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=' Policy Fusion Architecture - PyTorch')
     parser.add_argument('--gamma', type=float, default=0.99, metavar='G', help='discount factor (default: 0.99)')
-    parser.add_argument('--seed', type=int, default=10, metavar='N', help='random seed (default: 543)')
+    parser.add_argument('--seed', type=int, default=10, metavar='N', help='random seed (default: 10)')
     parser.add_argument('--render', action='store_true', help='render the environment')
     parser.add_argument('--hybrid', action='store_true', help='use hybrid reward')
     parser.add_argument('--beta', type=float, default=0.01, help='Rate for Entropy')
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.01, help='Test')
     parser.add_argument('--scratch', action='store_true', help='scratch')
     parser.add_argument('--sleep', type=int, help='Sleep time for render', default=1)
-    parser.add_argument('--batch_size', type=int, help='Sleep time for render', default=32)
+    parser.add_argument('--batch_size', type=int, help='Sleep time for render', default=10)
     args = parser.parse_args()
     args.cuda = torch.cuda.is_available() and (not args.no_cuda)
 
