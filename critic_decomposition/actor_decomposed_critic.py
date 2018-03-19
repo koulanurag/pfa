@@ -99,7 +99,7 @@ class ActorHybridCritic:
                 actor_loss = 0
                 for trajectory_info in n_trajectory_info:
                     obs, _rewards, _critic_info, _log_probs, _entropies = trajectory_info
-                    # gae = [0 for _ in range(self.reward_types)]
+                    gae = [0 for _ in range(self.reward_types)]
                     for i in range(len(obs)):
                         _, v_state = net(Variable(torch.FloatTensor(obs[i].tolist())).unsqueeze(0))
                         v_state = v_state.data.numpy()[0]
@@ -113,6 +113,10 @@ class ActorHybridCritic:
                         for r_i, r in enumerate(_rewards[i]):
                             advantage += r + args.gamma * v_next_state[r_i] - v_state[r_i]
                         actor_loss -= _log_probs[i] * advantage - args.beta * _entropies[i]
+                        # for r_i, r in enumerate(_rewards[i]):
+                        #     delta_t = r + args.gamma * v_next_state[r_i] - v_state[r_i]
+                        #     gae[r_i] += (args.gamma *  args.tau)
+                        # actor_loss -= _log_probs[i] * sum(gae) - args.beta * _entropies[i]
 
                 actor_loss = actor_loss / args.batch_size
                 actor_loss.backward()
