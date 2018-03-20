@@ -19,10 +19,12 @@ class PolicyGraident:
         self.__prob_bar_window = None
         pass
 
-    def __get_plot_data_dict(self, train_data, test_data):
+    def __get_plot_data_dict(self, train_data, test_data, loss_data):
         data_dict = [
             {'title': "Train_Performance_vs_Epoch", 'data': train_data, 'y_label': 'Episode Reward', 'x_label': 'Time'},
-            {'title': "Test_Performance_vs_Epoch", 'data': test_data, 'y_label': 'Episode Reward', 'x_label': 'Time'},
+            {'title': "Test_Performance_vs_Epoch", 'data': test_data[0], 'y_label': 'Episode Reward', 'x_label': 'Time'},
+            {'title': "No_steps_vs_Epoch", 'data': test_data[1], 'y_label': 'Steps to collect all fruit', 'x_label': 'Time'},
+            {'title': "Training_Loss", 'data': loss_data, 'y_label': 'Episode Loss', 'x_label': 'Time'},
         ]
         return data_dict
 
@@ -30,9 +32,12 @@ class PolicyGraident:
         optimizer = Adam(net.parameters(), lr=args.lr)
 
         test_perf_data = []
+        test_steps_data = []
         train_perf_data = []
         best = None
         n_trajectory_loss = []
+        loss_data = []
+
         for episode in range(args.train_episodes):
             net.train()
             env = env_fn()
@@ -42,13 +47,17 @@ class PolicyGraident:
             total_reward = 0
             log_probs = []
             ep_rewards = []
+            entropies = []
             obs = env.reset()
             while not done:
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
                 m = Categorical(action_probs)
                 action = m.sample()
-                log_probs.append(m.log_prob(Variable(action.data)))
+                action_log_prob = m.log_prob(Variable(action.data))
+                log_probs.append(action_log_prob)
+                entropy = -(action_log_prob * action_probs).sum(1)
+                entropies.append(entropy)
 
                 action = int(action.data[0])
                 obs, reward, done, info = env.step(action)
@@ -69,27 +78,30 @@ class PolicyGraident:
                     discounted_returns.std() + np.finfo(np.float32).eps)
 
             policy_loss = []
-            for log_prob, score in zip(log_probs, discounted_returns):
-                policy_loss.append(-log_prob * score)
+            for log_prob, score, entorpy in zip(log_probs, discounted_returns, entropies):
+                policy_loss.append(-(log_prob * score - args.beta * entorpy))
             n_trajectory_loss.append(policy_loss)  # collect n-trajectories
 
             # Update the network after collecting n trajectories
-            if episode % 1 == 0:
+            if episode % args.batch_size == 0:
                 optimizer.zero_grad()
                 sample_loss = 0
                 for _loss in n_trajectory_loss:
                     sample_loss += torch.cat(_loss).sum()
-                sample_loss = sample_loss / 10
+                sample_loss = sample_loss / args.batch_size
+                loss_data.append(sample_loss.data[0])
                 sample_loss.backward()
                 optimizer.step()
                 n_trajectory_loss = []
             print('Train=> Episode:{} Reward:{} Length:{}'.format(episode, total_reward, len(ep_rewards)))
 
             # test and log
-            if episode % 20 == 0:
-                test_reward = self.test(net, env_fn, 10, log=True)
+            if episode % args.batch_size == 0:
+                test_reward, test_steps = self.test(net, env_fn, 10, log=True)
                 test_perf_data.append(test_reward)
-                print('Test Performance:', test_reward)
+                test_steps_data.append(test_steps)
+                print('Performance (Reward):', test_reward)
+                print('Performance (Steps):', test_steps)
                 if best is None or best <= test_reward:
                     torch.save(net.state_dict(), net_path)
                     best = test_reward
@@ -98,12 +110,13 @@ class PolicyGraident:
                     print('Optimal Performance achieved!!')
                     break
             if episode % 10 == 0:
-                plot_data(self.__get_plot_data_dict(train_perf_data, test_perf_data), plots_dir)
+                plot_data(self.__get_plot_data_dict(train_perf_data, (test_perf_data, test_steps_data), loss_data), plots_dir)
         return net
 
     def test(self, net, env_fn, episodes, log=False, render=False, sleep=0):
         net.eval()
         all_episode_rewards = 0
+        all_steps = 0
         for episode in range(episodes):
             env = env_fn()
             done = False
@@ -114,7 +127,6 @@ class PolicyGraident:
             while not done:
                 obs = Variable(torch.FloatTensor(obs.tolist())).unsqueeze(0)
                 action_probs = net(obs)
-                m = Categorical(action_probs)
                 action = m.sample().data[0]
 
                 if render:
@@ -122,11 +134,11 @@ class PolicyGraident:
                     if self.__prob_bar_window is None:
                         self.__prob_bar_window = self.vis.bar(
                                                     X = action_probs.data.numpy()[0],
-                                                    opts = dict(rownames=['UP', 'RIGHT', 'DOWN', 'LEFT'])
+                                                    opts = dict(rownames=env.get_action_meanings)
                                                 )
                     else:
                         self.vis.bar(X = action_probs.data.numpy()[0],
-                                     opts = dict(rownames=['UP', 'RIGHT', 'DOWN', 'LEFT']),
+                                     opts = dict(rownames=env.get_action_meanings),
                                      win = self.__prob_bar_window)
 
                 obs, reward, done, info = env.step(action)
@@ -144,9 +156,10 @@ class PolicyGraident:
 
                 steps += 1
             env.close()
+            all_steps += steps
             all_episode_rewards += episode_reward
             if log:
                 print('Test => Episode:{} Reward:{} Length:{}'.format(episode, episode_reward, steps))
             if render:
                 self.vis.close(win=self.__prob_bar_window)
-        return all_episode_rewards / episodes
+        return all_episode_rewards / episodes, all_steps / episodes

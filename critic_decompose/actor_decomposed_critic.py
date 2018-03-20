@@ -122,7 +122,32 @@ class ActorHybridCritic:
                         advantage = 0
                         for r_i, r in enumerate(_rewards[i]):
                             advantage += r + args.gamma * v_next_state[r_i] - v_state[r_i]
-                        actor_loss -= _log_probs[i] * advantage - args.beta * _entropies[i]
+                        actor_loss += -_log_probs[i] * advantage - args.beta * _entropies[i]
+
+                # for trajectory_info in n_trajectory_info:
+                #     obs, _rewards, _critic_info, _log_probs, _entropies = trajectory_info
+                #     gae = [0 for _ in range(self.reward_types)]
+                #     for i in range(len(obs)-1,-1,-1):
+                #         obs_i = Variable(torch.FloatTensor(obs[i].tolist())).unsqueeze(0)
+                #         if args.cuda:
+                #             obs_i = obs_i.cuda()
+                #         _, v_state = net(obs_i)
+                #         v_state = v_state.data.cpu().numpy()[0]
+                #         if i != len(obs) - 1:
+                #             obs_next = Variable(torch.FloatTensor(obs[i + 1].tolist())).unsqueeze(0)
+                #             if args.cuda:
+                #                 obs_next = obs_next.cuda()
+                #             _, v_next_state = net(obs_next)
+                #             v_next_state = v_next_state.data.cpu().numpy()[0]
+                #         else:
+                #             v_next_state = [0 for _ in range(len(_rewards))]
+                #
+                #         # advantage = 0
+                #         for r_i, r in enumerate(_rewards[i]):
+                #             delta_t = r + args.gamma * v_next_state[r_i] - v_state[r_i]
+                #             gae[r_i] = gae[r_i] * args.gamma * args.tau + delta_t
+                #             # advantage += r + args.gamma * v_next_state[r_i] - v_state[r_i]
+                #         actor_loss -= _log_probs[i] * sum(gae) - args.beta * _entropies[i]
                         # for r_i, r in enumerate(_rewards[i]):
                         #     delta_t = r + args.gamma * v_next_state[r_i] - v_state[r_i]
                         #     gae[r_i] += (args.gamma *  args.tau)

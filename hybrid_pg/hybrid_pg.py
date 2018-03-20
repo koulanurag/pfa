@@ -1,11 +1,13 @@
 import random
 import time
+import math
 
 import numpy as np
 import torch
 from torch.optim import Adam
 from torch.autograd import Variable
 from torch.distributions import Categorical
+import torch.nn.functional as F
 from tools import plot_data
 
 class HybridPolicyGraident:
@@ -21,19 +23,22 @@ class HybridPolicyGraident:
         dist = e / np.sum(e)
         return dist
 
-    def __get_plot_data_dict(self, train_data, test_data):
+    def __get_plot_data_dict(self, train_data, test_data, loss_data):
         data_dict = [
             {'title': "Train_Performance_vs_Epoch", 'data': train_data, 'y_label': 'Episode Reward', 'x_label': 'Time'},
-            {'title': "Test_Performance_vs_Epoch", 'data': test_data, 'y_label': 'Episode Reward', 'x_label': 'Time'},
+            {'title': "Test_Performance_vs_Epoch", 'data': test_data[0], 'y_label': 'Episode Reward', 'x_label': 'Time'},
+            {'title': "No_steps_vs_Epoch", 'data': test_data[1], 'y_label': 'Steps to collect all fruit', 'x_label': 'Time'},
+            {'title': "Training_Loss", 'data': loss_data, 'y_label': 'Episode Loss', 'x_label': 'Time'},
         ]
         return data_dict
-
 
     def train(self, net, env_fn, net_path, plots_dir, args):
         optimizer = Adam(net.parameters(), lr=args.lr)
 
         test_perf_data = []
+        test_steps_data = []
         train_perf_data = []
+        loss_data = []
         best = None
         n_trajectory_loss = []
         n_trajectory_type_loss = []
@@ -46,19 +51,34 @@ class HybridPolicyGraident:
             done = False
             total_reward = 0
             log_probs = []
+            entropies = []
             reward_type_log_probs = {i: [] for i in range(self.reward_types)}
 
             ep_decomposed_rewards = []
             obs = env.reset()
             while not done:
                 obs = Variable(torch.Tensor(obs.tolist())).unsqueeze(0)
-                action_probs, reward_type_action_probs = net(obs)
+                action_logits, reward_type_action_probs = net(obs)
+
+                action_probs = F.softmax(action_logits)
+                action_log_prob = F.log_softmax(action_logits, dim =0)
+                entropy = -(action_log_prob * action_probs).sum()
+                entropies.append(entropy)
+
+
                 m = Categorical(action_probs)
                 action = m.sample()
-                log_probs.append(m.log_prob(action))
+                log_probs.append(m.log_prob(Variable(action.data)))
+
+
                 for reward_type_i in range(self.reward_types):
-                    m = Categorical(reward_type_action_probs[reward_type_i])
-                    reward_type_log_probs[reward_type_i].append(m.log_prob(Variable(action.data)))
+                    m = Categorical(F.softmax(reward_type_action_probs[reward_type_i]))
+                    log_prob = m.log_prob(Variable(action.data))
+                    if math.isnan(log_prob.data[0]):
+                        print(reward_type_action_probs[reward_type_i])
+                        import pdb; pdb.set_trace()
+
+                    reward_type_log_probs[reward_type_i].append(log_prob)
 
                 action = int(action.data[0])
                 obs, reward, done, info = env.step(action)
@@ -91,8 +111,9 @@ class HybridPolicyGraident:
 
             policy_loss = []
             policy_type_losses = {i: [] for i in range(self.reward_types)}
-            for log_prob, score in zip(log_probs, discounted_total_returns):
-                policy_loss.append(-log_prob * score)
+            for log_prob, score, entorpy in zip(log_probs, discounted_total_returns, entropies):
+                loss = -log_prob * score - args.beta * entorpy
+                policy_loss.append(loss)
 
             for type_i in range(self.reward_types):
                 for log_prob, score in zip(reward_type_log_probs[type_i], discounted_decomposed_returns[type_i]):
@@ -101,7 +122,7 @@ class HybridPolicyGraident:
             n_trajectory_loss.append(policy_loss)
             n_trajectory_type_loss.append(policy_type_losses)
 
-            if episode % 10 == 0:
+            if episode % args.batch_size  == 0:
                 start_time = time.time()
                 optimizer.zero_grad()
                 sample_loss = 0
@@ -109,15 +130,17 @@ class HybridPolicyGraident:
                 for _loss in n_trajectory_loss:
                     sample_loss += torch.cat(_loss).sum()
 
-                if self.decompose:
-                    for _loss in n_trajectory_type_loss:
-                        for type_i in range(self.reward_types):
-                            sample_loss += torch.cat(_loss[type_i]).sum()
+
+                for _loss in n_trajectory_type_loss:
+                    for type_i in range(self.reward_types):
+                        sample_loss += torch.cat(_loss[type_i]).sum()
 
                 end_time = time.time()
                 print("Loss Time", end_time - start_time)
 
-                sample_loss = sample_loss / 10
+
+                sample_loss = sample_loss / args.batch_size
+                loss_data.append(sample_loss.data[0])
                 start_time = time.time()
                 sample_loss.backward()
                 optimizer.step()
@@ -133,22 +156,25 @@ class HybridPolicyGraident:
             print('Episode:{} Reward:{} Length:{} Time:{}'.format(episode, total_reward, len(ep_decomposed_rewards), episode_end_time - episode_start_time))
 
             # test and log
-            if episode % 50 == 0:
-                test_reward = self.test(net, env_fn, 10, log=True, render=False)
+            if episode % 10 == 0:
+                test_reward, test_steps = self.test(net, env_fn, 10, log=True, render=False)
                 test_perf_data.append(test_reward)
-                print('Performance:', test_reward)
+                test_steps_data.append(test_steps)
+                print('Performance (Reward):', test_reward)
+                print('Performance (Steps):', test_steps)
                 if best is None or best <= test_reward:
                     torch.save(net.state_dict(), net_path)
                     best = test_reward
                     print('Model Saved!')
-            if episode % 200 == 0:
-                plot_data(self.__get_plot_data_dict(train_perf_data, test_perf_data), plots_dir)
+            if episode % 10 == 0:
+                plot_data(self.__get_plot_data_dict(train_perf_data, (test_perf_data, test_steps_data), loss_data), plots_dir)
 
         return net
 
     def test(self, net, env_fn, episodes, log=False, render=False, sleep=0):
         net.eval()
         all_episode_rewards = 0
+        all_steps = 0
         for episode in range(episodes):
             env = env_fn()
             done = False
@@ -172,12 +198,12 @@ class HybridPolicyGraident:
                         if self.__prob_bar_window[reward_type] is None:
                             self.__prob_bar_window[reward_type] = self.vis.bar(
                                                         X = probs,
-                                                        opts = dict(rownames = ['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                                        opts = dict(rownames = ['RIGHT', 'LEFT'],
                                                                     title   = "Action Prob for reward type ({}, {})".format(x, y))
                                                     )
                         else:
                             self.vis.bar(X = probs,
-                                         opts = dict(rownames = ['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                         opts = dict(rownames = ['RIGHT', 'LEFT'],
                                                      title   = "Action Prob for reward type ({}, {})".format(x, y)
                                                     ),
                                          win = self.__prob_bar_window[reward_type])
@@ -185,12 +211,12 @@ class HybridPolicyGraident:
                     if self.__combined_prob_bar_window is None:
                         self.__combined_prob_bar_window = self.vis.bar(
                                                             X = action_probs.data.numpy(),
-                                                            opts = dict(rownames=['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                                            opts = dict(rownames=['RIGHT', 'LEFT'],
                                                                         title   = "Combined Action Prob")
                                                         )
                     else:
                         self.vis.bar(X = action_probs.data.numpy(),
-                                     opts = dict(rownames =['UP', 'RIGHT', 'DOWN', 'LEFT'],
+                                     opts = dict(rownames =['RIGHT', 'LEFT'],
                                                  title    = "Combined Action Prob"),
                                      win = self.__combined_prob_bar_window)
 
@@ -210,6 +236,7 @@ class HybridPolicyGraident:
                 steps += 1
             env.close()
             all_episode_rewards += episode_reward
+            all_steps += steps
             if log:
                 print('Test => Episode:{} Reward:{} Length:{}'.format(episode, episode_reward, steps))
-        return all_episode_rewards / episodes
+        return all_episode_rewards / episodes, all_steps / episodes
